@@ -12,6 +12,13 @@ import json
 import os
 from pychain.blockchain import Blockchain
 from pychain.transaction import Transaction
+from pychain.exceptions import (
+    BlockchainError,
+    InvalidTransactionError,
+    InsufficientBalanceError,
+    ImportExportError,
+    ValidationError
+)
 
 
 class BlockchainCLI:
@@ -424,8 +431,11 @@ Examples:
         except FileNotFoundError:
             print(f"[ERROR] File not found: {args.filename}")
             sys.exit(1)
-        except ValueError as e:
+        except ImportExportError as e:
             print(f"[ERROR] {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"[ERROR] Unexpected error: {e}")
             sys.exit(1)
 
     def handle_summary(self, args):

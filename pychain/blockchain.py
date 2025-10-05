@@ -2,6 +2,20 @@ import time
 import json
 from pychain.block import Block
 from pychain.transaction import Transaction
+from pychain.logger_config import get_logger
+from pychain.exceptions import (
+    BlockchainError,
+    InvalidTransactionError,
+    InsufficientBalanceError,
+    InvalidBlockError,
+    ChainValidationError,
+    MiningError,
+    ImportExportError,
+    ValidationError
+)
+
+# Set up logger for this module
+logger = get_logger('pychain.blockchain')
 
 
 class Blockchain:
@@ -33,15 +47,32 @@ class Blockchain:
             adjustment_interval (int): Adjust difficulty every N blocks (default: 5)
             initial_balances (dict): Initial balances for addresses (default: None)
                 Example: {"Alice": 100, "Bob": 50}
+
+        Raises:
+            BlockchainError: If blockchain initialization fails
         """
-        self.chain = []
-        self.difficulty = difficulty
-        self.target_block_time = target_block_time
-        self.adjustment_interval = adjustment_interval
-        self.pending_transactions = []
-        self.mining_reward = 10
-        self.initial_balances = initial_balances if initial_balances is not None else {}
-        self.chain.append(self.create_genesis_block())
+        logger.info(f"Initializing blockchain (difficulty: {difficulty}, target_block_time: {target_block_time}s)")
+
+        try:
+            self.chain = []
+            self.difficulty = difficulty
+            self.target_block_time = target_block_time
+            self.adjustment_interval = adjustment_interval
+            self.pending_transactions = []
+            self.mining_reward = 10
+            self.initial_balances = initial_balances if initial_balances is not None else {}
+
+            if self.initial_balances:
+                logger.debug(f"Initial balances set for {len(self.initial_balances)} addresses")
+
+            genesis = self.create_genesis_block()
+            self.chain.append(genesis)
+
+            logger.info("Blockchain initialized successfully with genesis block")
+
+        except Exception as e:
+            logger.critical(f"Blockchain initialization failed: {e}")
+            raise BlockchainError(f"Blockchain initialization failed: {e}") from e
 
     def create_genesis_block(self):
         """
@@ -181,29 +212,43 @@ class Blockchain:
             Transaction: The created transaction
 
         Raises:
-            ValueError: If transaction is invalid or sender has insufficient balance
+            InvalidTransactionError: If transaction is invalid
+            InsufficientBalanceError: If sender has insufficient balance
         """
-        # Create transaction
-        transaction = Transaction(sender, receiver, amount)
+        logger.debug(f"Creating transaction: {sender} -> {receiver}: {amount}")
 
-        # Validate transaction structure
-        is_valid, error_msg = transaction.is_valid()
-        if not is_valid:
-            raise ValueError(f"Invalid transaction: {error_msg}")
+        try:
+            # Create transaction (will validate inputs)
+            transaction = Transaction(sender, receiver, amount)
 
-        # Check sender balance (including pending transactions)
-        current_balance = self.get_balance(sender, include_pending=True)
+            # Validate transaction structure
+            is_valid, error_msg = transaction.is_valid()
+            if not is_valid:
+                logger.warning(f"Transaction rejected: {error_msg}")
+                raise InvalidTransactionError(f"Invalid transaction: {error_msg}")
 
-        # System can create transactions without balance check
-        if sender != "System" and current_balance < amount:
-            raise ValueError(
-                f"Insufficient balance: {sender} has {current_balance}, "
-                f"but trying to send {amount}"
-            )
+            # Check sender balance (including pending transactions)
+            current_balance = self.get_balance(sender, include_pending=True)
 
-        self.pending_transactions.append(transaction)
-        print(f"Transaction added: {transaction}")
-        return transaction
+            # System can create transactions without balance check
+            if sender != "System" and current_balance < amount:
+                error_msg = (
+                    f"Insufficient balance for {sender}. "
+                    f"Available: {current_balance}, Required: {amount}"
+                )
+                logger.warning(f"Transaction rejected: {error_msg}")
+                raise InsufficientBalanceError(error_msg)
+
+            self.pending_transactions.append(transaction)
+            logger.info(f"Transaction accepted and added to pool: {transaction}")
+            print(f"Transaction added: {transaction}")
+            return transaction
+
+        except (InvalidTransactionError, InsufficientBalanceError):
+            raise
+        except Exception as e:
+            logger.error(f"Transaction creation failed: {e}")
+            raise BlockchainError(f"Transaction creation failed: {e}") from e
 
     def mine_pending_transactions(self, miner_address):
         """
@@ -217,38 +262,66 @@ class Blockchain:
 
         Returns:
             Block: The newly mined block, or None if no transactions to mine
+
+        Raises:
+            MiningError: If mining fails
+            ValidationError: If miner address is invalid
         """
+        logger.info(f"Mining requested by {miner_address}")
+
         if not self.pending_transactions:
+            logger.warning("No transactions to mine")
             print("No transactions to mine")
             return None
 
-        # Adjust difficulty if needed
-        self.difficulty = self.adjust_difficulty()
+        if not miner_address:
+            logger.error("Miner address cannot be empty")
+            raise ValidationError("Miner address cannot be empty")
 
-        # Create mining reward transaction
-        reward_tx = Transaction("System", miner_address, self.mining_reward)
+        try:
+            # Adjust difficulty if needed
+            old_difficulty = self.difficulty
+            self.difficulty = self.adjust_difficulty()
 
-        # Create block with pending transactions + reward
-        block_transactions = self.pending_transactions + [reward_tx]
+            if old_difficulty != self.difficulty:
+                logger.info(f"Difficulty adjusted: {old_difficulty} -> {self.difficulty}")
 
-        previous_block = self.get_latest_block()
-        new_block = Block(
-            previous_block.index + 1,
-            time.time(),
-            block_transactions,
-            previous_block.hash,
-            self.difficulty
-        )
+            # Create mining reward transaction
+            reward_tx = Transaction("System", miner_address, self.mining_reward)
 
-        # Mine the block
-        new_block.mine_block()
-        self.chain.append(new_block)
+            # Create block with pending transactions + reward
+            block_transactions = self.pending_transactions + [reward_tx]
+            logger.debug(f"Creating block with {len(block_transactions)} transactions ({len(self.pending_transactions)} pending + 1 reward)")
 
-        # Clear pending transactions
-        self.pending_transactions = []
+            previous_block = self.get_latest_block()
+            new_block = Block(
+                previous_block.index + 1,
+                time.time(),
+                block_transactions,
+                previous_block.hash,
+                self.difficulty
+            )
 
-        print(f"Block mined! Reward sent to {miner_address}")
-        return new_block
+            # Mine the block
+            mining_time = new_block.mine_block()
+            self.chain.append(new_block)
+
+            # Clear pending transactions
+            self.pending_transactions = []
+
+            logger.info(
+                f"Block {new_block.index} mined successfully in {mining_time:.2f}s. "
+                f"Reward ({self.mining_reward}) sent to {miner_address}"
+            )
+
+            print(f"Block mined! Reward sent to {miner_address}")
+            return new_block
+
+        except ValidationError:
+            raise
+        except Exception as e:
+            logger.critical(f"Mining failed: {e}")
+            raise MiningError(f"Mining failed: {e}") from e
 
     def get_balance(self, address, include_pending=False):
         """
@@ -391,55 +464,78 @@ class Blockchain:
         Returns:
             bool: True if chain is valid, False otherwise
         """
-        for i in range(len(self.chain)):
-            current_block = self.chain[i]
+        logger.info(f"Starting blockchain validation ({len(self.chain)} blocks)")
 
-            # Check hash integrity
-            if current_block.hash != current_block.calculate_hash():
-                if verbose:
-                    print(f"❌ Block {i} hash mismatch")
-                    print(f"   Stored: {current_block.hash}")
-                    print(f"   Calculated: {current_block.calculate_hash()}")
-                return False
+        try:
+            for i in range(len(self.chain)):
+                current_block = self.chain[i]
 
-            # Check Proof of Work (hash starts with required zeros)
-            target = "0" * current_block.difficulty
-            if current_block.hash[:current_block.difficulty] != target:
-                if verbose:
-                    print(f"❌ Block {i} doesn't meet PoW requirements")
-                    print(f"   Expected: {target}...")
-                    print(f"   Got: {current_block.hash[:current_block.difficulty]}...")
-                return False
-
-            # Check chain continuity
-            if i == 0:
-                # Genesis block validation
-                if current_block.previous_hash != "0":
+                # Check hash integrity
+                calculated_hash = current_block.calculate_hash()
+                if current_block.hash != calculated_hash:
+                    error_msg = f"Block {i}: Hash mismatch"
+                    logger.error(error_msg)
+                    logger.debug(f"Stored: {current_block.hash}")
+                    logger.debug(f"Calculated: {calculated_hash}")
                     if verbose:
-                        print("❌ Genesis block invalid: previous_hash != '0'")
-                    return False
-            else:
-                # Regular block validation
-                previous_block = self.chain[i - 1]
-                if current_block.previous_hash != previous_block.hash:
-                    if verbose:
-                        print(f"❌ Block {i} broken chain link")
-                        print(f"   previous_hash: {current_block.previous_hash}")
-                        print(f"   Previous block hash: {previous_block.hash}")
+                        print(f"[X] {error_msg}")
+                        print(f"   Stored: {current_block.hash}")
+                        print(f"   Calculated: {calculated_hash}")
                     return False
 
-            # Validate transactions in block
-            tx_valid, tx_error = self.validate_block_transactions(current_block)
-            if not tx_valid:
+                # Check Proof of Work (hash starts with required zeros)
+                target = "0" * current_block.difficulty
+                if current_block.hash[:current_block.difficulty] != target:
+                    error_msg = f"Block {i}: Invalid PoW (difficulty {current_block.difficulty})"
+                    logger.error(error_msg)
+                    if verbose:
+                        print(f"[X] {error_msg}")
+                        print(f"   Expected: {target}...")
+                        print(f"   Got: {current_block.hash[:current_block.difficulty]}...")
+                    return False
+
+                # Check chain continuity
+                if i == 0:
+                    # Genesis block validation
+                    if current_block.previous_hash != "0":
+                        error_msg = "Genesis block invalid: previous_hash != '0'"
+                        logger.error(error_msg)
+                        if verbose:
+                            print(f"[X] {error_msg}")
+                        return False
+                else:
+                    # Regular block validation
+                    previous_block = self.chain[i - 1]
+                    if current_block.previous_hash != previous_block.hash:
+                        error_msg = f"Block {i}: Broken chain link"
+                        logger.error(error_msg)
+                        logger.debug(f"Expected: {previous_block.hash}")
+                        logger.debug(f"Got: {current_block.previous_hash}")
+                        if verbose:
+                            print(f"[X] {error_msg}")
+                            print(f"   previous_hash: {current_block.previous_hash}")
+                            print(f"   Previous block hash: {previous_block.hash}")
+                        return False
+
+                # Validate transactions in block
+                tx_valid, tx_error = self.validate_block_transactions(current_block)
+                if not tx_valid:
+                    logger.error(f"Block {i}: {tx_error}")
+                    if verbose:
+                        print(f"[X] Block {i} transaction validation failed")
+                        print(f"   Error: {tx_error}")
+                    return False
+
+                logger.debug(f"Block {i} validated successfully")
                 if verbose:
-                    print(f"❌ Block {i} transaction validation failed")
-                    print(f"   Error: {tx_error}")
-                return False
+                    print(f"[OK] Block {i} valid (Nonce: {current_block.nonce})")
 
-            if verbose:
-                print(f"✅ Block {i} valid (Nonce: {current_block.nonce})")
+            logger.info("Blockchain validation completed successfully")
+            return True
 
-        return True
+        except Exception as e:
+            logger.critical(f"Blockchain validation failed with error: {e}")
+            return False
 
     def get_mining_stats(self):
         """
@@ -604,12 +700,25 @@ class Blockchain:
 
         Returns:
             bool: True if successful, False otherwise
+
+        Raises:
+            ImportExportError: If export fails
         """
+        logger.info(f"Exporting blockchain to {filename}")
+
         try:
             with open(filename, 'w') as f:
                 json.dump(self.to_dict(), f, indent=2)
+
+            logger.info(f"Blockchain exported successfully to {filename} ({len(self.chain)} blocks)")
             return True
+
+        except IOError as e:
+            logger.error(f"File I/O error during export: {e}")
+            print(f"Error exporting to file: {e}")
+            return False
         except Exception as e:
+            logger.error(f"Export failed: {e}")
             print(f"Error exporting to file: {e}")
             return False
 
@@ -622,15 +731,19 @@ class Blockchain:
             filename (str): Path to file to read
 
         Returns:
-            Blockchain: Reconstructed blockchain instance, or None if error
+            Blockchain: Reconstructed blockchain instance
 
         Raises:
             FileNotFoundError: If file doesn't exist
-            ValueError: If file format is invalid
+            ImportExportError: If file format is invalid or import fails
         """
+        logger.info(f"Importing blockchain from {filename}")
+
         try:
             with open(filename, 'r') as f:
                 data = json.load(f)
+
+            logger.debug(f"JSON loaded, creating blockchain instance")
 
             # Create blockchain with saved parameters
             blockchain = cls(
@@ -640,10 +753,11 @@ class Blockchain:
                 initial_balances=data.get('initial_balances', {})
             )
 
-            # Clear genesis block
+            # Clear genesis block (will be replaced with imported blocks)
             blockchain.chain = []
 
             # Reconstruct blocks
+            logger.debug(f"Reconstructing {len(data.get('blocks', []))} blocks")
             for block_data in data.get('blocks', []):
                 # Reconstruct transactions
                 transactions = None
@@ -674,6 +788,9 @@ class Blockchain:
 
             # Reconstruct pending transactions
             blockchain.pending_transactions = []
+            pending_count = len(data.get('pending_transactions', []))
+            logger.debug(f"Reconstructing {pending_count} pending transactions")
+
             for tx_data in data.get('pending_transactions', []):
                 tx = Transaction(
                     tx_data['sender'],
@@ -687,14 +804,25 @@ class Blockchain:
             # Set mining reward
             blockchain.mining_reward = data.get('mining_reward', 10)
 
+            logger.info(
+                f"Blockchain imported successfully from {filename} "
+                f"({len(blockchain.chain)} blocks, {pending_count} pending transactions)"
+            )
+
             return blockchain
 
-        except FileNotFoundError:
-            raise FileNotFoundError(f"File not found: {filename}")
+        except FileNotFoundError as e:
+            logger.error(f"File not found: {filename}")
+            raise FileNotFoundError(f"File not found: {filename}") from e
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format: {e}")
+            logger.error(f"Invalid JSON in {filename}: {e}")
+            raise ImportExportError(f"Invalid JSON format: {e}") from e
+        except KeyError as e:
+            logger.error(f"Missing required field in blockchain data: {e}")
+            raise ImportExportError(f"Invalid blockchain file format - missing field: {e}") from e
         except Exception as e:
-            raise ValueError(f"Error importing blockchain: {e}")
+            logger.critical(f"Import failed: {e}")
+            raise ImportExportError(f"Error importing blockchain: {e}") from e
 
     def print_summary(self):
         """
