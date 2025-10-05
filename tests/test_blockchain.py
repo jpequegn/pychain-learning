@@ -408,6 +408,90 @@ class TestBlockchain(unittest.TestCase):
         blockchain3.chain[1].previous_hash = "wrong_hash"
         self.assertFalse(blockchain3.is_chain_valid())
 
+    # Edge Case Tests
+
+    def test_add_block_with_empty_string_data(self):
+        """Test adding block with empty string data."""
+        blockchain = Blockchain()
+        blockchain.add_block("")
+
+        self.assertEqual(len(blockchain.chain), 2)
+        self.assertEqual(blockchain.chain[1].data, "")
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_add_block_with_large_data(self):
+        """Test adding block with large data (10KB)."""
+        blockchain = Blockchain()
+        large_data = "x" * 10000
+
+        blockchain.add_block(large_data)
+
+        self.assertEqual(len(blockchain.chain), 2)
+        self.assertEqual(len(blockchain.chain[1].data), 10000)
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_add_block_with_special_characters(self):
+        """Test adding block with special characters."""
+        blockchain = Blockchain()
+        special_data = "Test!@#$%^&*()_+-=[]{}|;':\",./<>?\\`~"
+
+        blockchain.add_block(special_data)
+
+        self.assertEqual(blockchain.chain[1].data, special_data)
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_add_block_with_unicode_data(self):
+        """Test adding block with unicode characters."""
+        blockchain = Blockchain()
+        unicode_data = "Hello 世界 🌍 Привет"
+
+        blockchain.add_block(unicode_data)
+
+        self.assertEqual(blockchain.chain[1].data, unicode_data)
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_add_block_with_numeric_data(self):
+        """Test adding block with numeric data."""
+        blockchain = Blockchain()
+        blockchain.add_block(42)
+        blockchain.add_block(3.14159)
+
+        self.assertEqual(blockchain.chain[1].data, 42)
+        self.assertEqual(blockchain.chain[2].data, 3.14159)
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_add_block_with_boolean_data(self):
+        """Test adding block with boolean data."""
+        blockchain = Blockchain()
+        blockchain.add_block(True)
+        blockchain.add_block(False)
+
+        self.assertEqual(blockchain.chain[1].data, True)
+        self.assertEqual(blockchain.chain[2].data, False)
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_add_block_with_none_data(self):
+        """Test adding block with None data."""
+        blockchain = Blockchain()
+        blockchain.add_block(None)
+
+        self.assertEqual(blockchain.chain[1].data, None)
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_multiple_edge_case_blocks(self):
+        """Test adding multiple blocks with various edge case data."""
+        blockchain = Blockchain()
+
+        blockchain.add_block("")  # Empty
+        blockchain.add_block("x" * 10000)  # Large
+        blockchain.add_block("!@#$%^&*()")  # Special chars
+        blockchain.add_block(12345)  # Numeric
+        blockchain.add_block({"nested": {"data": "value"}})  # Nested dict
+        blockchain.add_block([1, "two", {"three": 3}])  # Mixed list
+
+        self.assertEqual(len(blockchain.chain), 7)  # Genesis + 6
+        self.assertTrue(blockchain.is_chain_valid())
+
 
 if __name__ == '__main__':
     unittest.main()

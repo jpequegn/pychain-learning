@@ -123,6 +123,96 @@ class TestBlock(unittest.TestCase):
         # Should produce the same hash
         self.assertEqual(original_hash, recalculated_hash)
 
+    # Edge Case Tests
+
+    def test_block_with_numeric_data(self):
+        """Test creating a block with numeric data."""
+        timestamp = time.time()
+        block = Block(0, timestamp, 12345, "0")
+
+        self.assertEqual(block.index, 0)
+        self.assertEqual(block.data, 12345)
+        self.assertIsNotNone(block.hash)
+        self.assertEqual(len(block.hash), 64)
+
+    def test_block_with_empty_string_data(self):
+        """Test creating a block with empty string data."""
+        timestamp = time.time()
+        block = Block(0, timestamp, "", "0")
+
+        self.assertEqual(block.data, "")
+        self.assertIsNotNone(block.hash)
+        self.assertEqual(len(block.hash), 64)
+
+    def test_block_with_large_data(self):
+        """Test creating a block with large data (10KB)."""
+        timestamp = time.time()
+        large_data = "x" * 10000
+        block = Block(0, timestamp, large_data, "0")
+
+        self.assertEqual(len(block.data), 10000)
+        self.assertIsNotNone(block.hash)
+        self.assertEqual(len(block.hash), 64)
+
+    def test_block_with_special_characters(self):
+        """Test creating a block with special characters."""
+        timestamp = time.time()
+        special_data = "Test!@#$%^&*()_+-=[]{}|;':\",./<>?\\`~"
+        block = Block(0, timestamp, special_data, "0")
+
+        self.assertEqual(block.data, special_data)
+        self.assertIsNotNone(block.hash)
+        self.assertEqual(len(block.hash), 64)
+
+    def test_block_with_unicode_data(self):
+        """Test creating a block with unicode characters."""
+        timestamp = time.time()
+        unicode_data = "Hello 世界 🌍 Привет"
+        block = Block(0, timestamp, unicode_data, "0")
+
+        self.assertEqual(block.data, unicode_data)
+        self.assertIsNotNone(block.hash)
+        self.assertEqual(len(block.hash), 64)
+
+    def test_block_with_multiline_data(self):
+        """Test creating a block with multiline string data."""
+        timestamp = time.time()
+        multiline_data = """Line 1
+Line 2
+Line 3"""
+        block = Block(0, timestamp, multiline_data, "0")
+
+        self.assertEqual(block.data, multiline_data)
+        self.assertIsNotNone(block.hash)
+
+    def test_block_with_nested_dict_data(self):
+        """Test creating a block with nested dictionary data."""
+        timestamp = time.time()
+        nested_data = {
+            "user": "Alice",
+            "transaction": {
+                "amount": 100,
+                "to": "Bob",
+                "metadata": {
+                    "timestamp": "2024-01-01",
+                    "verified": True
+                }
+            }
+        }
+        block = Block(0, timestamp, nested_data, "0")
+
+        self.assertEqual(block.data, nested_data)
+        self.assertIsNotNone(block.hash)
+
+    def test_block_with_mixed_type_list_data(self):
+        """Test creating a block with list containing mixed types."""
+        timestamp = time.time()
+        mixed_list = ["string", 123, {"key": "value"}, [1, 2, 3], True, None]
+        block = Block(0, timestamp, mixed_list, "0")
+
+        self.assertEqual(block.data, mixed_list)
+        self.assertIsNotNone(block.hash)
+
 
 if __name__ == '__main__':
     unittest.main()
