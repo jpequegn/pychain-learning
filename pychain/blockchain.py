@@ -68,3 +68,62 @@ class Blockchain:
         self.chain.append(new_block)
 
         return new_block
+
+    def is_chain_valid(self, verbose=False):
+        """
+        Validate the entire blockchain.
+
+        Checks three key aspects:
+        1. Genesis block has previous_hash == "0" and valid hash
+        2. Each block's stored hash matches its calculated hash
+        3. Each block's previous_hash matches the previous block's hash
+
+        Args:
+            verbose (bool): If True, print detailed validation info
+
+        Returns:
+            bool: True if chain is valid, False otherwise
+        """
+        # Validate genesis block
+        genesis_block = self.chain[0]
+
+        if genesis_block.previous_hash != "0":
+            if verbose:
+                print("❌ Genesis block invalid: previous_hash != '0'")
+            return False
+
+        if genesis_block.hash != genesis_block.calculate_hash():
+            if verbose:
+                print("❌ Genesis block hash mismatch")
+                print(f"   Stored: {genesis_block.hash}")
+                print(f"   Calculated: {genesis_block.calculate_hash()}")
+            return False
+
+        if verbose:
+            print("✅ Block 0 (Genesis) valid")
+
+        # Validate remaining blocks
+        for i in range(1, len(self.chain)):
+            current_block = self.chain[i]
+            previous_block = self.chain[i - 1]
+
+            # Check if current block's hash is correct
+            if current_block.hash != current_block.calculate_hash():
+                if verbose:
+                    print(f"❌ Block {i} hash mismatch")
+                    print(f"   Stored: {current_block.hash}")
+                    print(f"   Calculated: {current_block.calculate_hash()}")
+                return False
+
+            # Check if current block's previous_hash matches previous block's hash
+            if current_block.previous_hash != previous_block.hash:
+                if verbose:
+                    print(f"❌ Block {i} broken chain link")
+                    print(f"   previous_hash: {current_block.previous_hash}")
+                    print(f"   Previous block hash: {previous_block.hash}")
+                return False
+
+            if verbose:
+                print(f"✅ Block {i} valid")
+
+        return True
