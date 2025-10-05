@@ -82,3 +82,26 @@ class Transaction:
             str: Python code-like representation
         """
         return f"Transaction({self.sender!r}, {self.receiver!r}, {self.amount})"
+
+    def is_valid(self):
+        """
+        Validate the transaction.
+
+        Checks:
+        1. Amount is positive (greater than 0), except for System transactions which can be zero
+        2. Sender and receiver are different
+
+        Returns:
+            tuple: (is_valid, error_message)
+                - is_valid (bool): True if transaction is valid
+                - error_message (str): Error description if invalid, None if valid
+        """
+        # Check for positive amount (System can send zero for genesis/special transactions)
+        if self.amount <= 0 and self.sender != "System":
+            return False, "Transaction amount must be positive"
+
+        # Check sender and receiver are different
+        if self.sender == self.receiver:
+            return False, "Sender and receiver cannot be the same"
+
+        return True, None

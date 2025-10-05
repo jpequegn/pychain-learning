@@ -20,7 +20,7 @@ class Blockchain:
         mining_reward (float): Reward given to miners for mining a block
     """
 
-    def __init__(self, difficulty=2, target_block_time=10, adjustment_interval=5):
+    def __init__(self, difficulty=2, target_block_time=10, adjustment_interval=5, initial_balances=None):
         """
         Initialize the blockchain with a genesis block and dynamic difficulty.
 
@@ -30,6 +30,8 @@ class Blockchain:
             difficulty (int): Initial mining difficulty (default: 2)
             target_block_time (float): Target time between blocks in seconds (default: 10)
             adjustment_interval (int): Adjust difficulty every N blocks (default: 5)
+            initial_balances (dict): Initial balances for addresses (default: None)
+                Example: {"Alice": 100, "Bob": 50}
         """
         self.chain = []
         self.difficulty = difficulty
@@ -37,6 +39,7 @@ class Blockchain:
         self.adjustment_interval = adjustment_interval
         self.pending_transactions = []
         self.mining_reward = 10
+        self.initial_balances = initial_balances if initial_balances is not None else {}
         self.chain.append(self.create_genesis_block())
 
     def create_genesis_block(self):
@@ -162,7 +165,11 @@ class Blockchain:
 
     def create_transaction(self, sender, receiver, amount):
         """
-        Create and add a transaction to the pending transaction pool.
+        Create and add a transaction to the pending transaction pool with validation.
+
+        Validates the transaction before adding it to the pool:
+        1. Checks transaction is valid (positive amount, different sender/receiver)
+        2. Verifies sender has sufficient balance (including pending transactions)
 
         Args:
             sender (str): Sender address
@@ -171,8 +178,28 @@ class Blockchain:
 
         Returns:
             Transaction: The created transaction
+
+        Raises:
+            ValueError: If transaction is invalid or sender has insufficient balance
         """
+        # Create transaction
         transaction = Transaction(sender, receiver, amount)
+
+        # Validate transaction structure
+        is_valid, error_msg = transaction.is_valid()
+        if not is_valid:
+            raise ValueError(f"Invalid transaction: {error_msg}")
+
+        # Check sender balance (including pending transactions)
+        current_balance = self.get_balance(sender, include_pending=True)
+
+        # System can create transactions without balance check
+        if sender != "System" and current_balance < amount:
+            raise ValueError(
+                f"Insufficient balance: {sender} has {current_balance}, "
+                f"but trying to send {amount}"
+            )
+
         self.pending_transactions.append(transaction)
         print(f"Transaction added: {transaction}")
         return transaction
@@ -222,20 +249,23 @@ class Blockchain:
         print(f"Block mined! Reward sent to {miner_address}")
         return new_block
 
-    def get_balance(self, address):
+    def get_balance(self, address, include_pending=False):
         """
         Calculate the balance for a given address.
 
         Iterates through all blocks and transactions to calculate
         the current balance by summing all incoming and outgoing amounts.
+        Optionally includes pending transactions.
 
         Args:
             address (str): Address to check balance for
+            include_pending (bool): If True, include pending transactions (default: False)
 
         Returns:
             float: Current balance of the address
         """
-        balance = 0
+        # Start with initial balance if one exists
+        balance = self.initial_balances.get(address, 0)
 
         # Go through all blocks
         for block in self.chain:
@@ -247,7 +277,76 @@ class Blockchain:
                     if transaction.receiver == address:
                         balance += transaction.amount
 
+        # Include pending transactions if requested
+        if include_pending:
+            for transaction in self.pending_transactions:
+                if transaction.sender == address:
+                    balance -= transaction.amount
+                if transaction.receiver == address:
+                    balance += transaction.amount
+
         return balance
+
+    def validate_block_transactions(self, block):
+        """
+        Validate all transactions in a block.
+
+        Checks each transaction for:
+        1. Transaction structure validity (positive amount, different sender/receiver)
+        2. Transaction hash integrity
+        3. Sender balance sufficiency (reconstructed at block position)
+
+        Args:
+            block (Block): Block to validate
+
+        Returns:
+            tuple: (is_valid, error_message)
+                - is_valid (bool): True if all transactions are valid
+                - error_message (str): Error description if invalid, None if valid
+        """
+        if block.transactions is None:
+            # Legacy data block, no transaction validation needed
+            return True, None
+
+        # Build balance state up to this block
+        balances = dict(self.initial_balances)
+
+        # Get block index in chain
+        try:
+            block_index = self.chain.index(block)
+        except ValueError:
+            return False, "Block not in chain"
+
+        # Reconstruct balances from genesis to block before this one
+        for i in range(block_index):
+            current_block = self.chain[i]
+            if current_block.transactions is not None:
+                for tx in current_block.transactions:
+                    balances[tx.sender] = balances.get(tx.sender, 0) - tx.amount
+                    balances[tx.receiver] = balances.get(tx.receiver, 0) + tx.amount
+
+        # Validate each transaction in the block
+        for tx in block.transactions:
+            # Check transaction structure
+            is_valid, error_msg = tx.is_valid()
+            if not is_valid:
+                return False, f"Invalid transaction structure: {error_msg}"
+
+            # Check transaction hash
+            if tx.transaction_id != tx.calculate_hash():
+                return False, f"Transaction hash mismatch for {tx.transaction_id}"
+
+            # Check balance (System can send without balance)
+            if tx.sender != "System":
+                sender_balance = balances.get(tx.sender, 0)
+                if sender_balance < tx.amount:
+                    return False, f"Insufficient balance: {tx.sender} has {sender_balance}, trying to send {tx.amount}"
+
+            # Update balances for next transaction
+            balances[tx.sender] = balances.get(tx.sender, 0) - tx.amount
+            balances[tx.receiver] = balances.get(tx.receiver, 0) + tx.amount
+
+        return True, None
 
     def get_transaction_history(self, address):
         """
@@ -278,11 +377,12 @@ class Blockchain:
         """
         Validate the entire blockchain.
 
-        Checks four key aspects:
+        Checks five key aspects:
         1. Genesis block has previous_hash == "0" and valid hash
         2. Each block's stored hash matches its calculated hash
         3. Each block's previous_hash matches the previous block's hash
         4. Each block meets Proof of Work requirements (hash starts with required zeros)
+        5. All transactions in each block are valid (structure, balance, hash integrity)
 
         Args:
             verbose (bool): If True, print detailed validation info
@@ -326,6 +426,14 @@ class Blockchain:
                         print(f"   previous_hash: {current_block.previous_hash}")
                         print(f"   Previous block hash: {previous_block.hash}")
                     return False
+
+            # Validate transactions in block
+            tx_valid, tx_error = self.validate_block_transactions(current_block)
+            if not tx_valid:
+                if verbose:
+                    print(f"❌ Block {i} transaction validation failed")
+                    print(f"   Error: {tx_error}")
+                return False
 
             if verbose:
                 print(f"✅ Block {i} valid (Nonce: {current_block.nonce})")

@@ -8,7 +8,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_create_transaction(self):
         """Test creating a transaction."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         tx = blockchain.create_transaction("Alice", "Bob", 50)
 
@@ -20,7 +20,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_multiple_pending_transactions(self):
         """Test adding multiple pending transactions."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 50})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.create_transaction("Bob", "Charlie", 25)
@@ -30,7 +30,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_mine_pending_transactions(self):
         """Test mining pending transactions."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 50})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.create_transaction("Bob", "Charlie", 25)
@@ -45,7 +45,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_mined_block_contains_reward(self):
         """Test that mined block contains mining reward transaction."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         block = blockchain.mine_pending_transactions("Miner1")
@@ -70,19 +70,19 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_balance_calculation_simple(self):
         """Test simple balance calculation."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         # Alice sends 50 to Bob
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
 
-        self.assertEqual(blockchain.get_balance("Alice"), -50)
+        self.assertEqual(blockchain.get_balance("Alice"), 50)  # 100 - 50
         self.assertEqual(blockchain.get_balance("Bob"), 50)
         self.assertEqual(blockchain.get_balance("Miner1"), 10)  # Mining reward
 
     def test_balance_calculation_multiple_transactions(self):
         """Test balance calculation with multiple transactions."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 100})
 
         # Alice sends 50 to Bob
         blockchain.create_transaction("Alice", "Bob", 50)
@@ -92,14 +92,14 @@ class TestBlockchainWithTransactions(unittest.TestCase):
         blockchain.create_transaction("Bob", "Charlie", 25)
         blockchain.mine_pending_transactions("Miner1")
 
-        self.assertEqual(blockchain.get_balance("Alice"), -50)
-        self.assertEqual(blockchain.get_balance("Bob"), 25)  # 50 - 25
+        self.assertEqual(blockchain.get_balance("Alice"), 50)  # 100 - 50
+        self.assertEqual(blockchain.get_balance("Bob"), 125)  # 100 + 50 - 25
         self.assertEqual(blockchain.get_balance("Charlie"), 25)
         self.assertEqual(blockchain.get_balance("Miner1"), 20)  # 2 blocks * 10 reward
 
     def test_balance_calculation_multiple_miners(self):
         """Test balance calculation with different miners."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -112,7 +112,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_transaction_history_basic(self):
         """Test basic transaction history retrieval."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -124,7 +124,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_transaction_history_multiple_transactions(self):
         """Test transaction history with multiple transactions."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.create_transaction("Alice", "Charlie", 30)
@@ -142,7 +142,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_transaction_history_includes_block_info(self):
         """Test that transaction history includes block information."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -168,7 +168,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_chain_validation_with_transactions(self):
         """Test that chain validation works with transaction-based blocks."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -180,7 +180,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_tampering_detected_with_transactions(self):
         """Test that tampering with transactions is detected."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -193,7 +193,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_custom_mining_reward(self):
         """Test blockchain with custom mining reward."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
         blockchain.mining_reward = 25
 
         blockchain.create_transaction("Alice", "Bob", 50)
@@ -203,7 +203,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_block_transaction_count(self):
         """Test getting transaction count from blocks."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 50})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.create_transaction("Bob", "Charlie", 25)
@@ -214,7 +214,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_block_total_amount(self):
         """Test calculating total amount in a block."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100, "Bob": 50})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.create_transaction("Bob", "Charlie", 25)
@@ -225,7 +225,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_zero_balance_for_new_address(self):
         """Test that new addresses have zero balance."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -245,7 +245,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_mixed_block_types_validation(self):
         """Test validation works with mixed block types."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         # Add transaction block
         blockchain.create_transaction("Alice", "Bob", 50)
@@ -259,7 +259,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_empty_transaction_history(self):
         """Test transaction history for address with no transactions."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -270,7 +270,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_print_blockchain_with_transactions(self):
         """Test that print_blockchain doesn't crash with transactions."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
@@ -280,7 +280,7 @@ class TestBlockchainWithTransactions(unittest.TestCase):
 
     def test_print_balances(self):
         """Test that print_balances doesn't crash."""
-        blockchain = Blockchain(difficulty=2)
+        blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
         blockchain.create_transaction("Alice", "Bob", 50)
         blockchain.mine_pending_transactions("Miner1")
