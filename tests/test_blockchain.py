@@ -276,6 +276,138 @@ class TestBlockchain(unittest.TestCase):
             print(f"  Hash: {block.hash}")
             print(f"  Previous: {block.previous_hash}")
 
+    # Tests for is_chain_valid() method
+
+    def test_valid_chain_returns_true(self):
+        """Test that a valid blockchain returns True."""
+        blockchain = Blockchain()
+        blockchain.add_block("Block 1")
+        blockchain.add_block("Block 2")
+
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_valid_genesis_only_chain(self):
+        """Test that a blockchain with only genesis block is valid."""
+        blockchain = Blockchain()
+
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_invalid_genesis_previous_hash(self):
+        """Test that invalid genesis previous_hash is detected."""
+        blockchain = Blockchain()
+
+        # Tamper with genesis block's previous_hash
+        blockchain.chain[0].previous_hash = "invalid"
+
+        self.assertFalse(blockchain.is_chain_valid())
+
+    def test_invalid_genesis_hash(self):
+        """Test that invalid genesis hash is detected."""
+        blockchain = Blockchain()
+
+        # Tamper with genesis block's hash
+        blockchain.chain[0].hash = "invalid_hash"
+
+        self.assertFalse(blockchain.is_chain_valid())
+
+    def test_tampered_block_data_detected(self):
+        """Test that tampering with block data is detected."""
+        blockchain = Blockchain()
+        blockchain.add_block("Original data")
+        blockchain.add_block("Block 2")
+
+        # Tamper with block data
+        blockchain.chain[1].data = "Tampered data"
+
+        self.assertFalse(blockchain.is_chain_valid())
+
+    def test_tampered_block_hash_detected(self):
+        """Test that tampering with block hash is detected."""
+        blockchain = Blockchain()
+        blockchain.add_block("Block 1")
+
+        # Tamper with block hash
+        blockchain.chain[1].hash = "fake_hash_12345"
+
+        self.assertFalse(blockchain.is_chain_valid())
+
+    def test_broken_chain_link_detected(self):
+        """Test that broken chain links are detected."""
+        blockchain = Blockchain()
+        blockchain.add_block("Block 1")
+        blockchain.add_block("Block 2")
+
+        # Break the chain by modifying previous_hash
+        blockchain.chain[2].previous_hash = "wrong_hash"
+
+        self.assertFalse(blockchain.is_chain_valid())
+
+    def test_multiple_blocks_valid_chain(self):
+        """Test validation with multiple blocks in chain."""
+        blockchain = Blockchain()
+        blockchain.add_block("Block 1")
+        blockchain.add_block("Block 2")
+        blockchain.add_block("Block 3")
+        blockchain.add_block("Block 4")
+        blockchain.add_block("Block 5")
+
+        self.assertTrue(blockchain.is_chain_valid())
+
+    def test_validation_after_tampering_middle_block(self):
+        """Test that tampering with middle block is detected."""
+        blockchain = Blockchain()
+        blockchain.add_block("Block 1")
+        blockchain.add_block("Block 2")
+        blockchain.add_block("Block 3")
+
+        # Tamper with middle block
+        blockchain.chain[2].data = "Tampered"
+
+        self.assertFalse(blockchain.is_chain_valid())
+
+    def test_verbose_mode_genesis_only(self):
+        """Test verbose mode with genesis-only blockchain."""
+        blockchain = Blockchain()
+
+        # Capture printed output (optional - just ensure it doesn't crash)
+        result = blockchain.is_chain_valid(verbose=True)
+
+        self.assertTrue(result)
+
+    def test_verbose_mode_with_tampering(self):
+        """Test verbose mode when tampering is detected."""
+        blockchain = Blockchain()
+        blockchain.add_block("Block 1")
+        blockchain.chain[1].data = "Tampered"
+
+        # Should return False even in verbose mode
+        result = blockchain.is_chain_valid(verbose=True)
+
+        self.assertFalse(result)
+
+    def test_usage_example_from_issue_5(self):
+        """Test the usage examples from issue #5."""
+        # Test 1: Valid chain
+        blockchain = Blockchain()
+        blockchain.add_block("Block 1")
+        blockchain.add_block("Block 2")
+        self.assertTrue(blockchain.is_chain_valid())
+
+        # Test 2: Tampered data
+        blockchain.chain[1].data = "Tampered"
+        self.assertFalse(blockchain.is_chain_valid())
+
+        # Test 3: Invalid genesis
+        blockchain2 = Blockchain()
+        blockchain2.chain[0].previous_hash = "invalid"
+        self.assertFalse(blockchain2.is_chain_valid())
+
+        # Test 4: Broken chain
+        blockchain3 = Blockchain()
+        blockchain3.add_block("Block 1")
+        blockchain3.chain[1].previous_hash = "wrong_hash"
+        self.assertFalse(blockchain3.is_chain_valid())
+
 
 if __name__ == '__main__':
     unittest.main()
