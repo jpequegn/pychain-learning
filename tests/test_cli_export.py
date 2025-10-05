@@ -4,6 +4,7 @@ import os
 import tempfile
 from io import StringIO
 from cli import BlockchainCLI
+from pychain.exceptions import ImportExportError
 
 
 class TestCLIExport(unittest.TestCase):

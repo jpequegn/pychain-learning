@@ -1,6 +1,12 @@
 import unittest
 from pychain.transaction import Transaction
 from pychain.blockchain import Blockchain
+from pychain.exceptions import (
+    ValidationError,
+    InvalidTransactionError,
+    InsufficientBalanceError,
+    BlockchainError
+)
 
 
 class TestTransactionValidation(unittest.TestCase):
@@ -23,21 +29,19 @@ class TestTransactionValidation(unittest.TestCase):
         self.assertIsNone(error)
 
     def test_negative_amount_invalid(self):
-        """Test that negative amount makes transaction invalid."""
-        tx = Transaction("Alice", "Bob", -50)
-        is_valid, error = tx.is_valid()
+        """Test that negative amount raises ValidationError."""
+        with self.assertRaises(ValidationError) as context:
+            Transaction("Alice", "Bob", -50)
 
-        self.assertFalse(is_valid)
-        self.assertIn("positive", error.lower())
+        self.assertIn("Amount must be positive", str(context.exception))
 
     def test_zero_amount_invalid(self):
-        """Test that zero amount makes transaction invalid (except for System)."""
+        """Test that zero amount raises ValidationError (except for System)."""
         # Regular user cannot send zero
-        tx = Transaction("Alice", "Bob", 0)
-        is_valid, error = tx.is_valid()
+        with self.assertRaises(ValidationError) as context:
+            Transaction("Alice", "Bob", 0)
 
-        self.assertFalse(is_valid)
-        self.assertIn("positive", error.lower())
+        self.assertIn("Amount must be positive", str(context.exception))
 
         # But System can send zero (for genesis blocks)
         tx_system = Transaction("System", "Genesis", 0)
@@ -47,12 +51,11 @@ class TestTransactionValidation(unittest.TestCase):
         self.assertIsNone(error)
 
     def test_same_sender_receiver_invalid(self):
-        """Test that sender == receiver makes transaction invalid."""
-        tx = Transaction("Alice", "Alice", 50)
-        is_valid, error = tx.is_valid()
+        """Test that sender == receiver raises InvalidTransactionError."""
+        with self.assertRaises(InvalidTransactionError) as context:
+            Transaction("Alice", "Alice", 50)
 
-        self.assertFalse(is_valid)
-        self.assertIn("same", error.lower())
+        self.assertIn("Sender and receiver cannot be the same", str(context.exception))
 
     def test_initial_balances_in_blockchain(self):
         """Test that blockchain supports initial balances."""
@@ -64,10 +67,10 @@ class TestTransactionValidation(unittest.TestCase):
         self.assertEqual(blockchain.get_balance("Charlie"), 0)
 
     def test_create_transaction_with_insufficient_balance(self):
-        """Test that creating transaction with insufficient balance raises error."""
+        """Test that creating transaction with insufficient balance raises InsufficientBalanceError."""
         blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 50})
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(InsufficientBalanceError) as context:
             blockchain.create_transaction("Alice", "Bob", 100)
 
         self.assertIn("Insufficient balance", str(context.exception))
@@ -86,18 +89,18 @@ class TestTransactionValidation(unittest.TestCase):
         self.assertEqual(tx.amount, 50)
 
     def test_create_transaction_invalid_structure(self):
-        """Test that creating invalid transaction raises error."""
+        """Test that creating invalid transaction raises specific errors."""
         blockchain = Blockchain(difficulty=2, initial_balances={"Alice": 100})
 
-        # Zero amount
-        with self.assertRaises(ValueError) as context:
+        # Zero amount - blockchain wraps ValidationError in BlockchainError
+        with self.assertRaises((ValidationError, BlockchainError)) as context:
             blockchain.create_transaction("Alice", "Bob", 0)
-        self.assertIn("Invalid transaction", str(context.exception))
+        self.assertIn("Amount must be positive", str(context.exception))
 
-        # Same sender and receiver
-        with self.assertRaises(ValueError) as context:
+        # Same sender and receiver - blockchain wraps InvalidTransactionError in BlockchainError
+        with self.assertRaises((InvalidTransactionError, BlockchainError)) as context:
             blockchain.create_transaction("Alice", "Alice", 50)
-        self.assertIn("Invalid transaction", str(context.exception))
+        self.assertIn("Sender and receiver cannot be the same", str(context.exception))
 
     def test_pending_transactions_reduce_balance(self):
         """Test that pending transactions are included in balance calculation."""
@@ -120,7 +123,7 @@ class TestTransactionValidation(unittest.TestCase):
 
         # Alice has 100 - 60 = 40 available
         # Should not be able to send 50
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(InsufficientBalanceError) as context:
             blockchain.create_transaction("Alice", "Charlie", 50)
 
         self.assertIn("Insufficient balance", str(context.exception))

@@ -1,6 +1,7 @@
 import unittest
 import time
 from pychain.transaction import Transaction
+from pychain.exceptions import ValidationError, InvalidTransactionError
 
 
 class TestTransaction(unittest.TestCase):
@@ -92,7 +93,7 @@ class TestTransaction(unittest.TestCase):
         self.assertIn("Alice", tx_str)
         self.assertIn("Bob", tx_str)
         self.assertIn("50", tx_str)
-        self.assertIn("→", tx_str)
+        self.assertIn("->", tx_str)  # ASCII arrow for Windows compatibility
 
     def test_transaction_repr(self):
         """Test debug representation of transaction."""
@@ -118,11 +119,11 @@ class TestTransaction(unittest.TestCase):
         self.assertIsNotNone(tx.transaction_id)
 
     def test_transaction_with_negative_amount(self):
-        """Test transaction with negative amount (edge case)."""
-        tx = Transaction("Alice", "Bob", -50)
+        """Test transaction with negative amount raises ValidationError."""
+        with self.assertRaises(ValidationError) as context:
+            Transaction("Alice", "Bob", -50)
 
-        self.assertEqual(tx.amount, -50)
-        self.assertIsNotNone(tx.transaction_id)
+        self.assertIn("Amount must be positive", str(context.exception))
 
     def test_transaction_with_large_amount(self):
         """Test transaction with very large amount."""

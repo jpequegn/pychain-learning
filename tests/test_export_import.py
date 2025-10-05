@@ -4,6 +4,7 @@ import json
 import tempfile
 from pychain.blockchain import Blockchain
 from pychain.transaction import Transaction
+from pychain.exceptions import ImportExportError
 
 
 class TestExportImport(unittest.TestCase):
@@ -196,7 +197,7 @@ class TestExportImport(unittest.TestCase):
         with open(self.test_filename, 'w') as f:
             f.write("not valid json{]")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ImportExportError):
             Blockchain.import_from_file(self.test_filename)
 
     def test_import_missing_fields(self):
