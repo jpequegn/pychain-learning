@@ -72,7 +72,7 @@ class Transaction:
         Returns:
             str: Human-readable transaction string
         """
-        return f"{self.sender} → {self.receiver}: {self.amount}"
+        return f"{self.sender} -> {self.receiver}: {self.amount}"
 
     def __repr__(self):
         """
