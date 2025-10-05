@@ -10,7 +10,8 @@ class Block:
     Attributes:
         index (int): Position of the block in the chain (0 for genesis block)
         timestamp (float): Unix timestamp of when the block was created
-        data (any): The data/payload stored in this block (can be string, dict, or list)
+        transactions (list): List of Transaction objects stored in this block
+        data (any): Legacy data field (for backward compatibility)
         previous_hash (str): Hash of the previous block in the chain
         difficulty (int): Number of leading zeros required in hash (Proof of Work)
         nonce (int): Counter used in mining to find valid hash
@@ -21,16 +22,29 @@ class Block:
         """
         Initialize a new Block.
 
+        Supports both legacy 'data' format and new 'transactions' format.
+        If data is a list of Transaction objects, stores them as transactions.
+        Otherwise, stores data in legacy format for backward compatibility.
+
         Args:
             index (int): Position of the block in the chain
             timestamp (float): Unix timestamp of block creation
-            data (any): Data to be stored in the block
+            data (any): Data or list of Transaction objects to store
             previous_hash (str): Hash of the previous block
             difficulty (int): Mining difficulty (default: 2)
         """
         self.index = index
         self.timestamp = timestamp
-        self.data = data
+
+        # Support both transactions and legacy data
+        # Check if data is a list of Transaction objects
+        if isinstance(data, list) and len(data) > 0 and hasattr(data[0], 'transaction_id'):
+            self.transactions = data
+            self.data = None  # No legacy data
+        else:
+            self.data = data
+            self.transactions = None  # No transactions
+
         self.previous_hash = previous_hash
         self.difficulty = difficulty
         self.nonce = 0
@@ -40,18 +54,28 @@ class Block:
         """
         Calculate the SHA-256 hash of this block.
 
-        Concatenates index, timestamp, data (as string), previous_hash, and nonce,
-        then generates a SHA-256 hash.
+        Handles both transaction-based blocks and legacy data blocks.
+        For transactions, serializes all transaction data to JSON.
+        For legacy data, uses the original serialization method.
 
         Returns:
             str: Hexadecimal digest of the block's hash
         """
-        # Convert data to string representation
-        # Use JSON for dicts/lists to ensure consistent serialization
-        if isinstance(self.data, (dict, list)):
-            data_string = json.dumps(self.data, sort_keys=True)
+        # Handle transaction-based blocks
+        if self.transactions is not None:
+            # Serialize transactions to JSON
+            transactions_data = json.dumps(
+                [tx.to_dict() for tx in self.transactions],
+                sort_keys=True
+            )
+            data_string = transactions_data
         else:
-            data_string = str(self.data)
+            # Legacy data handling
+            # Use JSON for dicts/lists to ensure consistent serialization
+            if isinstance(self.data, (dict, list)):
+                data_string = json.dumps(self.data, sort_keys=True)
+            else:
+                data_string = str(self.data)
 
         # Concatenate all block components (including nonce for PoW)
         block_string = f"{self.index}{self.timestamp}{data_string}{self.previous_hash}{self.nonce}"
@@ -90,3 +114,37 @@ class Block:
         print(f"Mining time: {mining_time:.2f} seconds")
 
         return mining_time
+
+    def get_transaction_count(self):
+        """
+        Get the number of transactions in this block.
+
+        Returns:
+            int: Number of transactions (0 if block uses legacy data format)
+        """
+        if self.transactions is not None:
+            return len(self.transactions)
+        return 0
+
+    def get_total_amount(self):
+        """
+        Calculate total transaction amount in this block.
+
+        Returns:
+            float: Sum of all transaction amounts (0 if block uses legacy data format)
+        """
+        if self.transactions is not None:
+            return sum(tx.amount for tx in self.transactions)
+        return 0
+
+    def __str__(self):
+        """
+        String representation of the block.
+
+        Returns:
+            str: Human-readable block description
+        """
+        if self.transactions is not None:
+            return f"Block {self.index} with {len(self.transactions)} transactions"
+        else:
+            return f"Block {self.index} with data: {self.data}"

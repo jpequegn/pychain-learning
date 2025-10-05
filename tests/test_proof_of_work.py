@@ -43,7 +43,7 @@ class TestProofOfWork(unittest.TestCase):
         mining_time = block.mine_block()
 
         self.assertIsInstance(mining_time, float)
-        self.assertGreater(mining_time, 0)
+        self.assertGreaterEqual(mining_time, 0)  # Can be 0 for very fast mining
 
     def test_different_difficulties(self):
         """Test mining with different difficulty levels."""

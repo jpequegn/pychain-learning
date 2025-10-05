@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/test_difficulty_adjustment.py -v)",
+      "Bash(python -m pytest tests/test_difficulty_adjustment.py::TestDifficultyAdjustment::test_difficulty_increases_when_mining_fast -v --timeout=30)",
+      "Bash(python -m pytest tests/test_difficulty_adjustment.py::TestDifficultyAdjustment::test_difficulty_decreases_when_mining_slow -v --timeout=30)",
+      "Bash(python -m pytest tests/test_difficulty_adjustment.py::TestDifficultyAdjustment::test_maximum_difficulty_enforced -v --timeout=30)",
+      "Bash(python -m pytest tests/test_difficulty_adjustment.py -v --timeout=60)",
+      "Bash(python -m pytest tests/test_difficulty_adjustment.py -v --timeout=60 -x)",
+      "Bash(python -m pytest tests/test_difficulty_adjustment.py -v --tb=short)",
+      "Bash(git commit:*)",
+      "Bash(python -m pytest tests/test_transaction.py -v)",
+      "Bash(python -m pytest tests/test_blockchain_transactions.py -v)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

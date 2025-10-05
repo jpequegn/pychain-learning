@@ -29,7 +29,12 @@ class TestBlockchain(unittest.TestCase):
         # Verify genesis block properties
         self.assertEqual(genesis.index, 0)
         self.assertEqual(genesis.previous_hash, "0")
-        self.assertEqual(genesis.data, "Genesis Block")
+
+        # Genesis block now has transactions instead of data
+        self.assertIsNotNone(genesis.transactions)
+        self.assertEqual(len(genesis.transactions), 1)
+        self.assertEqual(genesis.transactions[0].sender, "System")
+        self.assertEqual(genesis.transactions[0].receiver, "Genesis")
 
         # Verify timestamp is recent (within last second)
         current_time = time.time()
@@ -55,7 +60,10 @@ class TestBlockchain(unittest.TestCase):
         self.assertIsInstance(genesis, Block)
         self.assertEqual(genesis.index, 0)
         self.assertEqual(genesis.previous_hash, "0")
-        self.assertEqual(genesis.data, "Genesis Block")
+
+        # Genesis block now has transactions instead of data
+        self.assertIsNotNone(genesis.transactions)
+        self.assertEqual(len(genesis.transactions), 1)
 
     def test_get_latest_block_returns_genesis_initially(self):
         """Test that get_latest_block() returns genesis block initially."""
@@ -66,7 +74,9 @@ class TestBlockchain(unittest.TestCase):
         self.assertIsInstance(latest, Block)
         self.assertEqual(latest.index, 0)
         self.assertEqual(latest.previous_hash, "0")
-        self.assertEqual(latest.data, "Genesis Block")
+
+        # Genesis block now has transactions instead of data
+        self.assertIsNotNone(latest.transactions)
 
         # Verify it's the same object as chain[0]
         self.assertIs(latest, blockchain.chain[0])
