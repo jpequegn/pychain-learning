@@ -1,4 +1,5 @@
 import time
+import json
 from pychain.block import Block
 from pychain.transaction import Transaction
 
@@ -537,3 +538,265 @@ class Blockchain:
             print(f"{address:20s}: {balance:10.2f}")
 
         print("=" * 40 + "\n")
+
+    def to_dict(self):
+        """
+        Convert blockchain to dictionary format.
+
+        Returns:
+            dict: Dictionary representation of blockchain with all data
+        """
+        return {
+            'difficulty': self.difficulty,
+            'target_block_time': self.target_block_time,
+            'adjustment_interval': self.adjustment_interval,
+            'mining_reward': self.mining_reward,
+            'initial_balances': self.initial_balances,
+            'blocks': [
+                {
+                    'index': block.index,
+                    'timestamp': block.timestamp,
+                    'previous_hash': block.previous_hash,
+                    'hash': block.hash,
+                    'nonce': block.nonce,
+                    'difficulty': block.difficulty,
+                    'transactions': [
+                        {
+                            'sender': tx.sender,
+                            'receiver': tx.receiver,
+                            'amount': tx.amount,
+                            'timestamp': tx.timestamp,
+                            'transaction_id': tx.transaction_id
+                        } for tx in block.transactions
+                    ] if block.transactions is not None else None,
+                    'data': block.data
+                } for block in self.chain
+            ],
+            'pending_transactions': [
+                {
+                    'sender': tx.sender,
+                    'receiver': tx.receiver,
+                    'amount': tx.amount,
+                    'timestamp': tx.timestamp,
+                    'transaction_id': tx.transaction_id
+                } for tx in self.pending_transactions
+            ]
+        }
+
+    def to_json(self, indent=2):
+        """
+        Convert blockchain to JSON string.
+
+        Args:
+            indent (int): Number of spaces for indentation (default: 2)
+
+        Returns:
+            str: JSON string representation of blockchain
+        """
+        return json.dumps(self.to_dict(), indent=indent)
+
+    def export_to_file(self, filename):
+        """
+        Export blockchain to JSON file.
+
+        Args:
+            filename (str): Path to file to write
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            with open(filename, 'w') as f:
+                json.dump(self.to_dict(), f, indent=2)
+            return True
+        except Exception as e:
+            print(f"Error exporting to file: {e}")
+            return False
+
+    @classmethod
+    def import_from_file(cls, filename):
+        """
+        Import blockchain from JSON file.
+
+        Args:
+            filename (str): Path to file to read
+
+        Returns:
+            Blockchain: Reconstructed blockchain instance, or None if error
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            ValueError: If file format is invalid
+        """
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+
+            # Create blockchain with saved parameters
+            blockchain = cls(
+                difficulty=data.get('difficulty', 2),
+                target_block_time=data.get('target_block_time', 10),
+                adjustment_interval=data.get('adjustment_interval', 5),
+                initial_balances=data.get('initial_balances', {})
+            )
+
+            # Clear genesis block
+            blockchain.chain = []
+
+            # Reconstruct blocks
+            for block_data in data.get('blocks', []):
+                # Reconstruct transactions
+                transactions = None
+                if block_data.get('transactions') is not None:
+                    transactions = []
+                    for tx_data in block_data['transactions']:
+                        tx = Transaction(
+                            tx_data['sender'],
+                            tx_data['receiver'],
+                            tx_data['amount']
+                        )
+                        tx.timestamp = tx_data['timestamp']
+                        tx.transaction_id = tx_data['transaction_id']
+                        transactions.append(tx)
+
+                # Reconstruct block
+                block = Block(
+                    block_data['index'],
+                    block_data['timestamp'],
+                    transactions if transactions is not None else block_data.get('data'),
+                    block_data['previous_hash'],
+                    block_data['difficulty']
+                )
+                block.hash = block_data['hash']
+                block.nonce = block_data['nonce']
+
+                blockchain.chain.append(block)
+
+            # Reconstruct pending transactions
+            blockchain.pending_transactions = []
+            for tx_data in data.get('pending_transactions', []):
+                tx = Transaction(
+                    tx_data['sender'],
+                    tx_data['receiver'],
+                    tx_data['amount']
+                )
+                tx.timestamp = tx_data['timestamp']
+                tx.transaction_id = tx_data['transaction_id']
+                blockchain.pending_transactions.append(tx)
+
+            # Set mining reward
+            blockchain.mining_reward = data.get('mining_reward', 10)
+
+            return blockchain
+
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File not found: {filename}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON format: {e}")
+        except Exception as e:
+            raise ValueError(f"Error importing blockchain: {e}")
+
+    def print_summary(self):
+        """
+        Print a summary of the blockchain state.
+
+        Displays:
+        - Total blocks, difficulty, pending transactions
+        - Mining statistics if available
+        - Chain validation status
+        """
+        print("\n" + "=" * 60)
+        print("BLOCKCHAIN SUMMARY")
+        print("=" * 60)
+
+        print(f"\nChain Information:")
+        print(f"  Total Blocks: {len(self.chain)}")
+        print(f"  Current Difficulty: {self.difficulty}")
+        print(f"  Target Block Time: {self.target_block_time}s")
+        print(f"  Adjustment Interval: Every {self.adjustment_interval} blocks")
+        print(f"  Mining Reward: {self.mining_reward}")
+        print(f"  Pending Transactions: {len(self.pending_transactions)}")
+
+        # Mining stats
+        stats = self.get_mining_stats()
+        if stats:
+            print(f"\nMining Performance:")
+            print(f"  Average Block Time: {stats['avg_block_time']:.2f}s")
+            print(f"  Average Difficulty: {stats['avg_difficulty']:.2f}")
+
+            ratio = stats['avg_block_time'] / stats['target_block_time']
+            if 0.8 <= ratio <= 1.2:
+                status = "On Target"
+            elif ratio < 0.8:
+                status = "Too Fast"
+            else:
+                status = "Too Slow"
+            print(f"  Status: {status}")
+
+        # Validation
+        is_valid = self.is_chain_valid()
+        print(f"\nChain Validation: {'[VALID]' if is_valid else '[INVALID]'}")
+
+        # Initial balances
+        if self.initial_balances:
+            print(f"\nInitial Balances:")
+            for address, balance in self.initial_balances.items():
+                print(f"  {address}: {balance}")
+
+        print("=" * 60 + "\n")
+
+    def print_transaction_details(self, block_index):
+        """
+        Print detailed transaction information for a specific block.
+
+        Args:
+            block_index (int): Index of the block to display
+
+        Returns:
+            bool: True if successful, False if block doesn't exist
+        """
+        if block_index < 0 or block_index >= len(self.chain):
+            print(f"Error: Block {block_index} does not exist")
+            return False
+
+        block = self.chain[block_index]
+
+        print("\n" + "=" * 60)
+        print(f"BLOCK #{block.index} TRANSACTION DETAILS")
+        print("=" * 60)
+
+        print(f"\nBlock Information:")
+        print(f"  Timestamp: {time.ctime(block.timestamp)}")
+        print(f"  Hash: {block.hash}")
+        print(f"  Previous Hash: {block.previous_hash}")
+        print(f"  Nonce: {block.nonce}")
+        print(f"  Difficulty: {block.difficulty}")
+
+        if block.transactions is not None:
+            print(f"\nTransactions ({len(block.transactions)}):")
+            print("-" * 60)
+
+            total_amount = 0
+            for i, tx in enumerate(block.transactions, 1):
+                print(f"\n  Transaction {i}:")
+                print(f"    ID: {tx.transaction_id}")
+                print(f"    From: {tx.sender}")
+                print(f"    To: {tx.receiver}")
+                print(f"    Amount: {tx.amount}")
+                print(f"    Timestamp: {time.ctime(tx.timestamp)}")
+
+                # Validate transaction
+                is_valid, error_msg = tx.is_valid()
+                print(f"    Status: {'[VALID]' if is_valid else f'[INVALID: {error_msg}]'}")
+
+                total_amount += tx.amount
+
+            print("\n" + "-" * 60)
+            print(f"Total Transaction Volume: {total_amount}")
+
+        elif block.data is not None:
+            print(f"\nLegacy Data Block:")
+            print(f"  Data: {block.data}")
+
+        print("\n" + "=" * 60 + "\n")
+        return True

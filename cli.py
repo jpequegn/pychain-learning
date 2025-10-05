@@ -142,6 +142,21 @@ Examples:
         reset_parser = subparsers.add_parser('reset', help='Reset blockchain to genesis')
         reset_parser.add_argument('--confirm', action='store_true', help='Confirm reset')
 
+        # Export command
+        export_parser = subparsers.add_parser('export', help='Export blockchain to JSON file')
+        export_parser.add_argument('filename', help='Output filename')
+
+        # Import command
+        import_parser = subparsers.add_parser('import', help='Import blockchain from JSON file')
+        import_parser.add_argument('filename', help='Input filename')
+
+        # Summary command
+        summary_parser = subparsers.add_parser('summary', help='Show blockchain summary')
+
+        # Block details command
+        details_parser = subparsers.add_parser('details', help='Show detailed transaction info for a block')
+        details_parser.add_argument('block_index', type=int, help='Block index to display')
+
     def run(self, args=None):
         """
         Run CLI with provided arguments.
@@ -163,7 +178,7 @@ Examples:
             try:
                 handler(args)
                 # Save state after successful command execution
-                if args.command not in ['view', 'balance', 'history', 'validate', 'stats', 'pending']:
+                if args.command not in ['view', 'balance', 'history', 'validate', 'stats', 'pending', 'export', 'summary', 'details']:
                     self.save_blockchain()
             except Exception as e:
                 print(f"Error: {e}")
@@ -376,6 +391,52 @@ Examples:
         self.blockchain = Blockchain(difficulty=2)
         self.save_blockchain()
         print("[OK] Blockchain reset to genesis block")
+
+    def handle_export(self, args):
+        """Handle export command."""
+        success = self.blockchain.export_to_file(args.filename)
+
+        if success:
+            print(f"[OK] Blockchain exported to {args.filename}")
+            print(f"   Total blocks: {len(self.blockchain.chain)}")
+            print(f"   Pending transactions: {len(self.blockchain.pending_transactions)}")
+        else:
+            print(f"[ERROR] Failed to export blockchain")
+            sys.exit(1)
+
+    def handle_import(self, args):
+        """Handle import command."""
+        try:
+            self.blockchain = Blockchain.import_from_file(args.filename)
+
+            print(f"[OK] Blockchain imported from {args.filename}")
+            print(f"   Total blocks: {len(self.blockchain.chain)}")
+            print(f"   Pending transactions: {len(self.blockchain.pending_transactions)}")
+            print(f"   Difficulty: {self.blockchain.difficulty}")
+
+            # Validate imported chain
+            is_valid = self.blockchain.is_chain_valid()
+            if is_valid:
+                print(f"   Validation: [VALID]")
+            else:
+                print(f"   Validation: [INVALID - chain may be corrupted]")
+
+        except FileNotFoundError:
+            print(f"[ERROR] File not found: {args.filename}")
+            sys.exit(1)
+        except ValueError as e:
+            print(f"[ERROR] {e}")
+            sys.exit(1)
+
+    def handle_summary(self, args):
+        """Handle summary command."""
+        self.blockchain.print_summary()
+
+    def handle_details(self, args):
+        """Handle details command."""
+        success = self.blockchain.print_transaction_details(args.block_index)
+        if not success:
+            sys.exit(1)
 
 
 def main():
